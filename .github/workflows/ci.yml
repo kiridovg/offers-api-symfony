@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  DATABASE_URL: postgresql://app:app@127.0.0.1:5432/app?serverVersion=18&charset=utf8
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+
+    services:
+      database:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: app
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app -d app"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: apcu, intl, pdo_pgsql, zip
+          coverage: none
+
+      - uses: ramsey/composer-install@v4
+
+      - name: Create the test database
+        run: bin/console --env=test doctrine:database:create --if-not-exists
+
+      - name: Run migrations
+        run: bin/console --env=test doctrine:migrations:migrate --no-interaction --all-or-nothing
+
+      - name: Verify the schema matches the mapping
+        run: bin/console --env=test doctrine:schema:validate
+
+      - name: Run the test suite
+        run: bin/phpunit
+
+  quality:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: apcu, intl, pdo_pgsql, zip
+          coverage: none
+
+      - uses: ramsey/composer-install@v4
+
+      - name: Warm up the container for static analysis
+        run: bin/console cache:warmup
+
+      - name: Static analysis
+        run: vendor/bin/phpstan analyse --no-progress
+
+      - name: Coding standard
+        run: vendor/bin/php-cs-fixer fix --dry-run --diff
+
+  image:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build the production image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: frankenphp_prod
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
