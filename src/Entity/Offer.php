@@ -143,4 +143,9 @@ class Offer
     {
         return $this->expiresAt;
     }
+
+    public function reserveUnit(): void
+    {
+        --$this->availableUnits;
+    }
 }

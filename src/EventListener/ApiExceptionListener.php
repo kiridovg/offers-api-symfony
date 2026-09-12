@@ -2,6 +2,7 @@
 
 namespace App\EventListener;
 
+use App\Exception\OfferUnavailableException;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -34,6 +35,17 @@ final class ApiExceptionListener
 
         if ($validationFailure instanceof ValidationFailedException) {
             $event->setResponse($this->validationProblem($validationFailure));
+
+            return;
+        }
+
+        if ($throwable instanceof OfferUnavailableException) {
+            $event->setResponse($this->problem(Response::HTTP_CONFLICT, [
+                'type' => 'about:blank',
+                'title' => Response::$statusTexts[Response::HTTP_CONFLICT],
+                'status' => Response::HTTP_CONFLICT,
+                'detail' => $throwable->getMessage(),
+            ]));
 
             return;
         }
