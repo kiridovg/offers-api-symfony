@@ -38,14 +38,16 @@ jobs:
 
       - uses: ramsey/composer-install@v4
 
-      - name: Create the test database
-        run: bin/console --env=test doctrine:database:create --if-not-exists
-
       - name: Run migrations
-        run: bin/console --env=test doctrine:migrations:migrate --no-interaction --all-or-nothing
+        run: bin/console doctrine:migrations:migrate --no-interaction --all-or-nothing
 
       - name: Verify the schema matches the mapping
-        run: bin/console --env=test doctrine:schema:validate
+        run: bin/console doctrine:schema:validate
+
+      - name: Prepare the test database
+        run: |
+          bin/console --env=test doctrine:database:create --if-not-exists
+          bin/console --env=test doctrine:migrations:migrate --no-interaction --all-or-nothing
 
       - name: Run the test suite
         run: bin/phpunit
