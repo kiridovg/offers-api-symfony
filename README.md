@@ -2,7 +2,7 @@
 
 REST API for async supplier offer import, cheapest-offer search and safe booking.
 
-**PHP 8.4 · Symfony 8.1 · PostgreSQL 18 · Doctrine ORM 3 · Messenger · FrankenPHP · Docker**
+**PHP 8.4 · Symfony 8.1 · PostgreSQL 18 · Doctrine ORM 3 · RabbitMQ · Messenger · FrankenPHP · Docker**
 
 Legend: ✅ implemented · 🧪 verified by a functional test (35 tests, all green)
 
@@ -18,7 +18,7 @@ docker compose up --wait
 
 The `php` container waits for PostgreSQL and runs migrations on start, so the schema is always
 current. API: `https://localhost` (self-signed certificate, accept it once). Imports are consumed by
-the `worker` container.
+the `worker` container; the RabbitMQ management UI is on `http://localhost:15672`.
 
 ```bash
 docker compose exec php bin/console doctrine:migrations:migrate   # schema
@@ -54,8 +54,8 @@ de-facto standard template for Symfony, with a `worker` service added for the qu
 | ✅ | PHP 8.2+ | 8.4 (the image ships 8.5) |
 | ✅ | Modern framework | Symfony 8.1 |
 | ✅ | Relational database | PostgreSQL 18 |
-| ✅ | Queue | Messenger over the Doctrine transport |
-| ✅ | Docker optional | Compose with `php`, `worker`, `database` |
+| ✅ | Queue | Messenger over RabbitMQ (AMQP) |
+| ✅ | Docker optional | Compose with `php`, `worker`, `database`, `rabbitmq` |
 
 ## 3. Entities
 
@@ -193,10 +193,12 @@ test asserts both rounds so it stays visible.
 `make:migration` would try to drop it. Codes are therefore normalised to upper case at the DTO
 boundary and stored that way, which keeps the schema and the mapping in sync.
 
-**The queue runs on PostgreSQL.** `doctrine://default` is what the Messenger recipe configures by
-default, it needs no extra service, and the transport uses `SELECT ... FOR UPDATE SKIP LOCKED`. The
-`messenger_messages` table comes from a migration rather than `auto_setup` — DDL at runtime has no
-place in production.
+**The queue runs on RabbitMQ.** Imports are dispatched to an AMQP transport and consumed by a
+dedicated `worker` container, so a slow supplier feed never occupies a web process. Retries are the
+transport's job — three attempts with a growing delay — and a message that survives all of them lands
+in a separate `failed` queue instead of disappearing. That queue is inspected through the management
+UI on port 15672: AMQP receivers are not listable, so `messenger:failed:show` does not work with this
+transport, which is the price of a real broker over a table in the database.
 
 **Collections are enveloped, single resources are not.** `GET /api/properties` returns
 `{data, links, meta}` because pagination links need somewhere to live; `POST /api/imports` and

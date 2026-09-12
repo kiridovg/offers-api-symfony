@@ -24,6 +24,7 @@ RUN <<-EOF
 		git
 	install-php-extensions \
 		@composer \
+		amqp \
 		apcu \
 		intl \
 		opcache \

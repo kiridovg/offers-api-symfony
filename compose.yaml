@@ -1,9 +1,14 @@
 ---
 x-database-url: &database-url postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-!ChangeMe!}@database:5432/${POSTGRES_DB:-app}?serverVersion=${POSTGRES_VERSION:-15}&charset=${POSTGRES_CHARSET:-utf8}
+x-messenger-dsn: &messenger-dsn amqp://${RABBITMQ_USER:-app}:${RABBITMQ_PASSWORD:-!ChangeMe!}@rabbitmq:5672/%2f/messages
+x-messenger-failed-dsn: &messenger-failed-dsn amqp://${RABBITMQ_USER:-app}:${RABBITMQ_PASSWORD:-!ChangeMe!}@rabbitmq:5672/%2f/failed
 
 services:
   php:
     restart: unless-stopped
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
     environment:
       SERVER_NAME: ${SERVER_NAME:-localhost}, php:80
       DEFAULT_URI: https://${SERVER_NAME:-localhost}:${HTTPS_PORT:-443}
@@ -11,6 +16,8 @@ services:
       MERCURE_SUBSCRIBER_JWT_KEY: ${CADDY_MERCURE_JWT_SECRET:-!ChangeThisMercureHubJWTSecretKey!}
       # Run "composer require symfony/orm-pack" to install and configure Doctrine ORM
       DATABASE_URL: *database-url
+      MESSENGER_TRANSPORT_DSN: *messenger-dsn
+      MESSENGER_FAILED_TRANSPORT_DSN: *messenger-failed-dsn
       # Run "composer require symfony/mercure-bundle" to install and configure the Mercure integration
       MERCURE_URL: ${CADDY_MERCURE_URL:-http://php/.well-known/mercure}
       MERCURE_PUBLIC_URL: ${CADDY_MERCURE_PUBLIC_URL:-https://${SERVER_NAME:-localhost}:${HTTPS_PORT:-443}/.well-known/mercure}
@@ -44,6 +51,8 @@ services:
       disable: true
     environment:
       DATABASE_URL: *database-url
+      MESSENGER_TRANSPORT_DSN: *messenger-dsn
+      MESSENGER_FAILED_TRANSPORT_DSN: *messenger-failed-dsn
     command:
       - php
       - bin/console
@@ -55,12 +64,31 @@ services:
     depends_on:
       php:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     stop_signal: SIGTERM
     stop_grace_period: 60s
 
 # Mercure is installed as a Caddy module, prevent the Flex recipe from installing another service
 ###> symfony/mercure-bundle ###
 ###< symfony/mercure-bundle ###
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-app}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-!ChangeMe!}
+    ports:
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
 
 ###> doctrine/doctrine-bundle ###
   database:
@@ -84,6 +112,7 @@ services:
 volumes:
   caddy_data:
   caddy_config:
+  rabbitmq_data:
 ###> symfony/mercure-bundle ###
 ###< symfony/mercure-bundle ###
 

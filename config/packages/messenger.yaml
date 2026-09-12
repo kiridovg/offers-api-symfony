@@ -9,7 +9,7 @@ framework:
                     max_retries: 3
                     delay: 5000
                     multiplier: 3
-            failed: 'doctrine://default?queue_name=failed'
+            failed: '%env(MESSENGER_FAILED_TRANSPORT_DSN)%'
 
         routing:
             App\Message\ProcessImport: async
