@@ -16,10 +16,16 @@ final readonly class OfferInput
         #[Assert\Valid]
         public PropertyInput $property,
 
-        #[Context([DateTimeNormalizer::FORMAT_KEY => '!Y-m-d'])]
+        #[Context(
+            normalizationContext: [DateTimeNormalizer::FORMAT_KEY => 'Y-m-d'],
+            denormalizationContext: [DateTimeNormalizer::FORMAT_KEY => '!Y-m-d'],
+        )]
         public \DateTimeImmutable $checkIn,
 
-        #[Context([DateTimeNormalizer::FORMAT_KEY => '!Y-m-d'])]
+        #[Context(
+            normalizationContext: [DateTimeNormalizer::FORMAT_KEY => 'Y-m-d'],
+            denormalizationContext: [DateTimeNormalizer::FORMAT_KEY => '!Y-m-d'],
+        )]
         #[Assert\GreaterThan(propertyPath: 'checkIn')]
         public \DateTimeImmutable $checkOut,
 

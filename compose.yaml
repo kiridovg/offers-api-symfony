@@ -1,4 +1,6 @@
 ---
+x-database-url: &database-url postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-!ChangeMe!}@database:5432/${POSTGRES_DB:-app}?serverVersion=${POSTGRES_VERSION:-15}&charset=${POSTGRES_CHARSET:-utf8}
+
 services:
   php:
     restart: unless-stopped
@@ -8,7 +10,7 @@ services:
       MERCURE_PUBLISHER_JWT_KEY: ${CADDY_MERCURE_JWT_SECRET:-!ChangeThisMercureHubJWTSecretKey!}
       MERCURE_SUBSCRIBER_JWT_KEY: ${CADDY_MERCURE_JWT_SECRET:-!ChangeThisMercureHubJWTSecretKey!}
       # Run "composer require symfony/orm-pack" to install and configure Doctrine ORM
-      DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-!ChangeMe!}@database:5432/${POSTGRES_DB:-app}?serverVersion=${POSTGRES_VERSION:-15}&charset=${POSTGRES_CHARSET:-utf8}
+      DATABASE_URL: *database-url
       # Run "composer require symfony/mercure-bundle" to install and configure the Mercure integration
       MERCURE_URL: ${CADDY_MERCURE_URL:-http://php/.well-known/mercure}
       MERCURE_PUBLIC_URL: ${CADDY_MERCURE_PUBLIC_URL:-https://${SERVER_NAME:-localhost}:${HTTPS_PORT:-443}/.well-known/mercure}
@@ -35,6 +37,26 @@ services:
         target: 443
         published: ${HTTP3_PORT:-443}
         protocol: udp
+
+  worker:
+    restart: unless-stopped
+    healthcheck:
+      disable: true
+    environment:
+      DATABASE_URL: *database-url
+    command:
+      - php
+      - bin/console
+      - messenger:consume
+      - async
+      - --time-limit=3600
+      - --memory-limit=256M
+      - -v
+    depends_on:
+      php:
+        condition: service_healthy
+    stop_signal: SIGTERM
+    stop_grace_period: 60s
 
 # Mercure is installed as a Caddy module, prevent the Flex recipe from installing another service
 ###> symfony/mercure-bundle ###
